@@ -26,8 +26,8 @@ chrome_options.add_argument("--no-sandbox")  # Bypass OS security model
 chrome_options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems
 
 # Initialize the driver, the option configures the browser to headless, comment one out -yt
-driver = webdriver.Chrome(options=chrome_options) 
-# driver = webdriver.Chrome()
+#driver = webdriver.Chrome(options=chrome_options) 
+driver = webdriver.Chrome()
 
 driver.get("https://waterlooworks.uwaterloo.ca/")
 
@@ -58,8 +58,10 @@ else:
     driver.find_element(by=By.XPATH, value="/html/body/div/div/div[1]/div/div[2]/form/div[3]/button").click()
 
 
-driver.implicitly_wait(2)
+driver.implicitly_wait(8)
 driver.find_element(by=By.ID, value="dont-trust-browser-button").click()
+driver.implicitly_wait(15)
+driver.find_element(by=By.XPATH, value="/html/body/div[2]/header/div[4]/div/div/button").click()
 driver.implicitly_wait(5)
 driver.find_element(by=By.XPATH, value="/html/body/div[2]/header/div[3]/div[1]/nav/ul/li[2]/a").click()
 driver.find_element(by=By.XPATH, value="/html/body/main/div[2]/div/div/div/div[2]/div[3]/div[1]/div/div[2]/div/div/div/div/table/tbody/tr[4]/td[2]/a").click()
@@ -67,6 +69,10 @@ driver.implicitly_wait(5)
 
 
 original_window_handle = driver.current_window_handle
+
+page_list = driver.find_element(by=By.XPATH, value="/html/body/main/div[2]/div/div/div/div[2]/div/div/div/div/div[3]/div[4]/div/ul")
+pages = page_list.find_elements(by=By.TAG_NAME, value="li")
+max_page = len(pages) - 4
 
 
 usefulInformation = {"Job Title",
@@ -78,17 +84,18 @@ usefulInformation = {"Job Title",
                         " Required Skills" 
                         }
 
+
 with open('jobInfo.csv', mode='w', newline='', encoding='utf-8') as csv_file:
     def write_in_csv(driver):
         jobInfo = {}
         usefulInformation = {"Job Title",
-                             "Level", 
-                             "Region",
-                             "Job - City", 
-                             "Job - Province / State", 
-                             "Job Responsibilities",
-                             " Required Skills" 
-                             }
+                            "Level", 
+                            "Region",
+                            "Job - City", 
+                            "Job - Province / State", 
+                            "Job Responsibilities",
+                            " Required Skills" 
+                            }
         
         table = driver.find_elements(by=By.TAG_NAME, value="table")[1]
         try:
@@ -133,35 +140,39 @@ with open('jobInfo.csv', mode='w', newline='', encoding='utf-8') as csv_file:
         cleaned_job_info = {key.strip(): value for key, value in job_info.items()}  # Stripping spaces from keys
         writer.writerow(cleaned_job_info)
     index+=1
+    
+    for page in range(0, max_page):
+        postingsTable = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "postingsTable")))
+        rows = postingsTable.find_elements(by = By.TAG_NAME, value="tr")
 
-    postingsTable = driver.find_element(by=By.ID, value="postingsTable")
-    rows = postingsTable.find_elements(by = By.TAG_NAME, value="tr")
+        for row in rows:
+            try:
+                cell = row.find_elements(By.TAG_NAME, "td")[3]
+                link = cell.find_element(By.TAG_NAME, "a")
+                link.click()
 
-    for row in rows:
-        try:
-            cell = row.find_elements(By.TAG_NAME, "td")[3]
-            link = cell.find_element(By.TAG_NAME, "a")
-            link.click()
+                # Wait for the new window/tab to open
+                WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))
 
-            # Wait for the new window/tab to open
-            WebDriverWait(driver, 10).until(EC.number_of_windows_to_be(2))
+                # Switch to the new window
+                new_window_handle = [handle for handle in driver.window_handles if handle != original_window_handle][0]
+                driver.switch_to.window(new_window_handle)
 
-            # Switch to the new window
-            new_window_handle = [handle for handle in driver.window_handles if handle != original_window_handle][0]
-            driver.switch_to.window(new_window_handle)
+                # Here you can call your function to write in csv or perform other actions
+                write_in_csv(driver)
 
-            # Here you can call your function to write in csv or perform other actions
-            write_in_csv(driver)
+                # Close the current window and switch back to the original window
+                driver.close()
+                driver.switch_to.window(original_window_handle)
 
-            # Close the current window and switch back to the original window
-            driver.close()
-            driver.switch_to.window(original_window_handle)
+            except Exception as e:
+                print(f"Error processing a cell in row: {e}")
 
-        except Exception as e:
-            print(f"Error processing a cell in row: {e}")
+        print(len(rows))
+        print(index)
+        driver.find_element(by=By.XPATH, value="/html/body/main/div[2]/div/div/div/div[2]/div/div/div/div/div[3]/div[4]/div/ul/li[12]/a").click()
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "postingsTable")))
 
-    print(len(rows))
-    print(index)
 
 driver.quit()
 
